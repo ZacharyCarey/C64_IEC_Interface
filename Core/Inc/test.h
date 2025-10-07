@@ -71,6 +71,9 @@ void run()
 		// Print bytes to IEC
 		send(rx_buff, len);
 		HAL_Delay(2);
+		tx_buff[0] = 0;
+		tx_buff[1] = 0;
+		HAL_UART_Transmit(&huart2, tx_buff, 2, 100); // Signal operation finished
 	}
 }
 
