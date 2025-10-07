@@ -6,137 +6,83 @@
 #include <stdbool.h>
 #include "iec_driver.h"
 
+#define CMD_GLOBAL(CMD) (CMD & 0x1F)
+#define CMD_LISTEN(ADDR) (0x20 | (ADDR & 0x1F))
+#define CMD_SECOND(ADDR) (0x60 | (ADDR & 0x1F))
+#define CMD_UNLISTEN 0x3F
+#define CMD_TALK(ADDR) (0x40 | (ADDR & 0x1F))
+#define CMD_UNTALK 0x5F
+#define CMD_CLOSE(ADDR) (0xE0 | (ADDR & 0x1F))
+#define CMD_OPEN(ADDR) (0xF0 | (ADDR & 0x1F))
+
+uint8_t tx_buff[1000] = {0};
+uint8_t rx_buff[1000] = {0};
+
+const uint8_t newline_char = 13;
+void send(const uint8_t* data, uint16_t len)
+{
+	iec_command(true);
+	iec_send((0x20 | (4 & 0x1F)), false); // printer addr
+	iec_send((0x60 | (0 & 0x1F)), false); // Printer mode
+	iec_command(false);
+
+	while(len > 0)
+	{
+		iec_send(*data, false);
+		data++;
+		len--;
+	}
+	iec_send(newline_char, true);
+
+	iec_command(true);
+	iec_send(0x3F, false);
+	iec_command(false);
+	iec_end();
+}
 
 void run()
 {
-
-	/*
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
-	delayMicroseconds(10);
-	//HAL_Delay(1000);
-	HAL_GPIO_WritePin(CLK_GPIO_Port, CLK_Pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);
-	delayMicroseconds(15);
-	//HAL_Delay(1000);
-	HAL_GPIO_WritePin(CLK_GPIO_Port, CLK_Pin, GPIO_PIN_RESET);*/
-	//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
-	//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8);
-
-/*	uint16_t target = 25;
-	__HAL_TIM_SET_COUNTER(&htim1, 0);
-	for (int i = 0; i < 25; i++)
+	if (HAL_UART_Receive(&huart2, rx_buff, 3, /*HAL_MAX_DELAY*/1000) == HAL_OK)
 	{
-		while (__HAL_TIM_GET_COUNTER(&htim1) < target);
-		HAL_GPIO_TogglePin(CLK_GPIO_Port, CLK_Pin);
-		target += 25;
+		if (rx_buff[0] != 0) return;
+		uint16_t len = ((uint16_t)rx_buff[1] << 8) | rx_buff[2];
+		if (len == 0) return;
+		if (len > 1000)
+		{
+			// Exceeded our buffer size :(
+			tx_buff[0] = 0;
+			tx_buff[1] = 0;
+			tx_buff[2] = 0;
+			HAL_UART_Transmit(&huart2, tx_buff, 3, 100);
+			return;
+		}
+
+		// Send confirmation back
+		tx_buff[0] = 0;
+		tx_buff[1] = (len >> 8);
+		tx_buff[2] = (len & 0xFF);
+		HAL_UART_Transmit(&huart2, tx_buff, 3, 100);
+
+		// TODO speed can be improved by sending bytes over IEC while we wait for serial to send data (i.e. send bytes at the same time as receiving them)
+		// Receive expected bytes
+		if (HAL_UART_Receive(&huart2, rx_buff, len, 1000) != HAL_OK)
+			return;
+
+		// Print bytes to IEC
+		send(rx_buff, len);
+		HAL_Delay(2);
 	}
-
-
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);*/
-	//HAL_Delay(1000);
 }
 
-const uint16_t data_timer_thresh = 1056;
-/*void sendBit(bool bit)
-{
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, bit ? 60000 : 1056);
-
-	// Wait for timer to pass the data threshold
-	while(__HAL_TIM_GET_COUNTER(&htim2) <= data_timer_thresh);
-
-	// Wait for timer rollover
-	while(__HAL_TIM_GET_COUNTER(&htim2) >= data_timer_thresh);
-}*/
 
 void init()
 {
 	iec_init();
 	iec_reset();
 
-	char data[7];
-
-	for (int line = 0; line < 3; line++)
-	{
-		// Line (i)\r
-		data[0] = 76; // L
-		data[1] = 73; // I
-		data[2] = 78; // N
-		data[3] = 69; // E
-		data[4] = 32; // space
-		data[5] = 48 + line + 1; // i (1, 2, 3, etc)
-		data[6] = 13; // \r
-
-		iec_command(true);
-		iec_send((0x20 | (4 & 0x1F)), false); // printer addr
-		iec_send((0x60 | (0 & 0x1F)), false); // Printer mode
-		iec_command(false);
-
-		for (int i = 0; i < 7; i++)
-		{
-			iec_send(data[i], i == 6);
-		}
-
-		iec_command(true);
-		iec_send(0x3F, false);
-		iec_command(false);
-		iec_end();
-
-		HAL_Delay(2);
-	}
-
-
-	// Swap CLOCK to drive bus
-/*	GPIO_InitTypeDef GPIO_InitStruct = {0};
-	GPIO_InitStruct.Pin = CLK_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
-	HAL_GPIO_Init(CLK_GPIO_Port, &GPIO_InitStruct);
-*/
-/*
-	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
-	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
-	htim2.Instance->CR1 &= ~1;
-
-
-	HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_RESET);
-	HAL_Delay(3000);
-	HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_SET);
-	HAL_Delay(1000);
-
-	//__HAL_TIM_ENABLE(&htim1);
-	HAL_GPIO_WritePin(Reset_GPIO_Port, ATN_Pin, GPIO_PIN_RESET);
-	__HAL_TIM_SET_COUNTER(&htim2, 0);
-	__HAL_TIM_ENABLE(&htim2);
-	HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_RESET);
-	sendBit(false);
-	sendBit(false);
-	sendBit(true);
-	sendBit(true);
-	sendBit(false);
-	sendBit(true);
-	sendBit(false);
-	sendBit(true);
-
-	// Wait for timers to finish/rollover
-	//while(__HAL_TIM_GET_COUNTER(&htim2) >= data_timer_thresh);
-	htim2.Instance->CR1 &= ~1;
-	//HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_3);
-	//HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
-	HAL_GPIO_WritePin(Reset_GPIO_Port, ATN_Pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_SET);
-*/
-
-	//HAL_NVIC_EnableIRQ(TIM2_IRQn);
-	//__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
-
-
-
-	/*while(1)
-	{
-		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8);
-		HAL_Delay(2000);
-	}*/
+	send("LINE 1", 6);
+	send("LINE 2", 6);
+	send("LINE 3", 6);
 }
 
 #endif

@@ -74,6 +74,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 extern TIM_HandleTypeDef htim7;
+extern UART_HandleTypeDef huart2;
 
 /* USER CODE END Private defines */
 
