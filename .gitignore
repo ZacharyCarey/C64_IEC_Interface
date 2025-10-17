@@ -5,6 +5,7 @@ RemoteSystemsTempFiles/
 Debug/
 Release/
 *.launch
+.vscode
 
 # STM32 git ignore
 *.mxproject

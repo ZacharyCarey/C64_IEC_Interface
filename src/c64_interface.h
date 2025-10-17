@@ -1,10 +1,8 @@
 #ifndef C64_INTERFACE_H
 #define C64_INTERFACE_H
 
-#include "main.h"
-#include <stdint.h>
-#include <stdbool.h>
 #include "iec_driver.h"
+#include <stdint.h>
 
 #define CMD_GLOBAL(CMD) (CMD & 0x1F)
 #define CMD_LISTEN(ADDR) (0x20 | (ADDR & 0x1F))
@@ -16,35 +14,39 @@
 #define CMD_OPEN(ADDR) (0xF0 | (ADDR & 0x1F))
 
 const uint8_t newline_char = 13;
-void send(const uint8_t* data, uint16_t len)
-{
-	iec_command(true);
-	iec_send((0x20 | (4 & 0x1F)), false); // printer addr
-	iec_send((0x60 | (0 & 0x1F)), false); // Printer mode
-	iec_command(false);
 
-	while(len > 0)
+class C64_Basic
+{
+public:
+	C64_Basic(IEC* iec)
 	{
-		iec_send(*data, false);
-		data++;
-		len--;
+		this->driver = iec;
 	}
-	iec_send(newline_char, true);
 
-	iec_command(true);
-	iec_send(0x3F, false);
-	iec_command(false);
-	iec_end();
-}
+	void send(const void* data, uint16_t len)
+	{
+		const uint8_t* buf = (const uint8_t*)data;
+		driver->command(true);
+		driver->send((0x20 | (4 & 0x1F)), false); // printer addr
+		driver->send((0x60 | (0 & 0x1F)), false); // Printer mode
+		driver->command(false);
 
-void run()
-{
-	iec_init();
-	iec_reset();
+		while(len > 0)
+		{
+			driver->send(*buf, false);
+			buf++;
+			len--;
+		}
+		driver->send(newline_char, true);
 
-	send("LINE 1", 6);
-	send("LINE 2", 6);
-	send("LINE 3", 6);
-}
+		driver->command(true);
+		driver->send(0x3F, false);
+		driver->command(false);
+		driver->end();
+	}
+
+private:
+	IEC* driver;
+};
 
 #endif

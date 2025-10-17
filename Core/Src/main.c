@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "c64_interface.h"
+#include "program.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,16 +94,6 @@ int main(void)
   MX_TIM7_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  GPIOA->MODER &= ~0xF000; // Input
-  GPIOA->OTYPER |= 0xC0; // Open drain
-  GPIOA->OSPEEDR &= ~0xF000; // Low speed
-  GPIOA->PUPDR &= ~0xF000; // No pull
-  GPIOA->AFR[0] |= 0x22000000; // Set Alternate Function 2
 
   /* USER CODE END 2 */
 
@@ -251,18 +241,30 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, LED_Pin|Busy_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(Busy_GPIO_Port, Busy_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : LED_Pin Busy_Pin */
-  GPIO_InitStruct.Pin = LED_Pin|Busy_Pin;
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Busy_Pin */
+  GPIO_InitStruct.Pin = Busy_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(Busy_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DAT_Pin CLK_Pin */
+  GPIO_InitStruct.Pin = DAT_Pin|CLK_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ATN_Pin RESET_Pin */
   GPIO_InitStruct.Pin = ATN_Pin|RESET_Pin;
