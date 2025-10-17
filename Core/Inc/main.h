@@ -62,9 +62,9 @@ void Error_Handler(void);
 #define Busy_Pin GPIO_PIN_3
 #define Busy_GPIO_Port GPIOC
 #define DAT_Pin GPIO_PIN_6
-#define DAT_GPIO_Port GPIOA
+#define DAT_GPIO_Port GPIOC
 #define CLK_Pin GPIO_PIN_7
-#define CLK_GPIO_Port GPIOA
+#define CLK_GPIO_Port GPIOC
 #define ATN_Pin GPIO_PIN_8
 #define ATN_GPIO_Port GPIOB
 #define RESET_Pin GPIO_PIN_9
