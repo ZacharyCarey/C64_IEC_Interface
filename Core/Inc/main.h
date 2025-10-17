@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f1xx_hal.h"
+#include "stm32f4xx_hal.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -57,25 +57,22 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define CLK_Pin GPIO_PIN_10
-#define CLK_GPIO_Port GPIOB
-#define DATA_Pin GPIO_PIN_11
-#define DATA_GPIO_Port GPIOB
-#define ATN_Pin GPIO_PIN_12
+#define LED_Pin GPIO_PIN_1
+#define LED_GPIO_Port GPIOC
+#define Busy_Pin GPIO_PIN_3
+#define Busy_GPIO_Port GPIOC
+#define DAT_Pin GPIO_PIN_6
+#define DAT_GPIO_Port GPIOA
+#define CLK_Pin GPIO_PIN_7
+#define CLK_GPIO_Port GPIOA
+#define ATN_Pin GPIO_PIN_8
 #define ATN_GPIO_Port GPIOB
-#define Reset_Pin GPIO_PIN_13
-#define Reset_GPIO_Port GPIOB
-#define SRQ_Pin GPIO_PIN_14
-#define SRQ_GPIO_Port GPIOB
-#define LED_Blue_Pin GPIO_PIN_8
-#define LED_Blue_GPIO_Port GPIOC
-#define LED_Green_Pin GPIO_PIN_9
-#define LED_Green_GPIO_Port GPIOC
+#define RESET_Pin GPIO_PIN_9
+#define RESET_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 extern TIM_HandleTypeDef htim7;
-extern UART_HandleTypeDef huart2;
-
+extern UART_HandleTypeDef huart3;
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

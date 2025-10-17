@@ -14,6 +14,20 @@
 #define TIMING_BIT_DELAY 25 // Time to wait after setting the data bit before pulsing clock
 #define TIMING_BIT 80 // Clock cycle to use while sending bits
 
+
+#define CLK_ModeMask 0xC000
+//#define CLK_ModeBit(X) ((X) << 14)
+#define CLK_ModeBit 14
+#define DAT_ModeMask 0x3000
+//#define DAT_ModeBit(X) ((X) << 12)
+#define DAT_ModeBit 12
+#define MODE_Input 0
+#define MODE_Output 1
+#define MODE_Timer 2
+#define SET_MODE(PORT, BIT, MODE) ((PORT)->MODER = ((PORT)->MODER & ~(3 << (BIT))) | ((MODE) << (BIT)))
+#define PIN_HIGH(PORT, PIN) ((PORT)->BSRR |= (PIN))
+#define PIN_LOW(PORT, PIN) ((PORT)->BSRR |= (PIN) << 16)
+
 // TODO use later when reading or during idle bus
 bool checkATN = false;
 
@@ -61,65 +75,82 @@ struct IOPin
     }
 };
 
-constexpr IOPin ClkPin{CLK_GPIO_Port, CLK_Pin};
-constexpr IOPin DataPin{DATA_GPIO_Port, DATA_Pin};
+//constexpr IOPin ClkPin{CLK_GPIO_Port, CLK_Pin};
+//constexpr IOPin DataPin{DAT_GPIO_Port, DAT_Pin};
 constexpr IOPin AtnPin{ATN_GPIO_Port, ATN_Pin};
-constexpr IOPin ResetPin{Reset_GPIO_Port, Reset_Pin};
-constexpr IOPin SrqPin{SRQ_GPIO_Port, SRQ_Pin};
+constexpr IOPin ResetPin{RESET_GPIO_Port, RESET_Pin};
+//constexpr IOPin SrqPin{SRQ_GPIO_Port, SRQ_Pin};
 
-TIM_TypeDef* htim = TIM2;
-void TIM2_Init()
+#define TIM_PERIOD 7887
+#define TIM_PRESCALER 0
+#define TIM_CLK_PULSE 5754
+#define TIM_DATA_PULSE 3696
+
+TIM_TypeDef* htim = TIM3;
+
+// NOTE: This function is for channel 1 and 2 only
+void TIM_ConfigChannelPWM(uint32_t channel, uint32_t mode)
 {
-	// Enable clock
-	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+	htim->CCER &= ~((TIM_CCER_CC1E | TIM_CCER_CC1P | TIM_CCER_CC1NP | TIM_CCER_CC1NE) << channel);
+	htim->CCER |= (TIM_OCPOLARITY_HIGH) << channel;
 
-	// Timer config
+	htim->CCMR1 &= ~((TIM_CCMR1_OC1M | TIM_CCMR1_CC1S | TIM_CCMR1_OC1FE | TIM_CCMR1_OC1PE) << (channel * 2));
+	htim->CCMR1 |= (mode) << (channel * 2); // PWM mode
+	htim->CCMR1 |= TIM_OCFAST_DISABLE << (channel * 2);
+}
+
+void TIM_Init()
+{
 	htim->CR1 &= ~TIM_CR1_CEN; // Ensure timer is disabled before configuring
-	htim->CR1 &= ~TIM_CR1_DIR; // Count up
-	htim->PSC = 0; // Set prescaler
-	htim->ARR = 2253; // timer maximum, 93.9us
-	htim->CCR3 = 1644; // compare value, 68.5us
-	htim->CCR4 = 1056; // compare value, 44us
+	__HAL_RCC_TIM3_CLK_ENABLE();
 
-	// Set PWM mode for channel 3
-	htim->CCMR2 &= ~TIM_CCMR2_OC3M_Msk;
-	htim->CCMR2 |= (TIM_CCMR2_OC3M_0 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_2); // 111 - PWM mode 2
+	htim->CR1 &= ~(TIM_CR1_DIR | TIM_CR1_CMS | TIM_CR1_CKD | TIM_CR1_ARPE);
+	htim->CR1 |= TIM_COUNTERMODE_UP;
+	htim->CR1 |= TIM_CLOCKDIVISION_DIV1;
+	htim->CR1 |= TIM_AUTORELOAD_PRELOAD_DISABLE;
+	htim->CR1 |= TIM_CR1_URS;
 
-	// Set PWM mode for channel 4
-	htim->CCMR2 &= ~TIM_CCMR2_OC4M_Msk;
-	htim->CCMR2 |= (TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_2); // 110 - PWM mode 1
+	htim->ARR = TIM_PERIOD;
+	htim->PSC = TIM_PRESCALER;
 
-	htim->CCER &= ~(TIM_CCER_CC3P | TIM_CCER_CC4P); // Select output polarity to 0 - active high
-	htim->CCER |= (TIM_CCER_CC3E | TIM_CCER_CC4E); // Enable outputs of channel 3 and 4
+	/* Generate an update event to reload the Prescaler
+	 and the repetition counter (only for advanced timer) value immediately */
+	htim->EGR = TIM_EGR_UG;
 
-	// configure GPIO
-	//__HAL_RCC_GPIOB_CLK_ENABLE();
-	//GPIO_InitTypeDef GPIO_InitStruct = {0};
-	/**TIM2 GPIO Configuration
-	PB10     ------> TIM2_CH3
-	PB11     ------> TIM2_CH4
+	// Config master sync
+	htim->SMCR &= ~(TIM_SMCR_SMS | TIM_SMCR_TS | TIM_SMCR_ETF | TIM_SMCR_ETPS | TIM_SMCR_ECE | TIM_SMCR_ETP | TIM_SMCR_MSM);
+	htim->SMCR |= TIM_MASTERSLAVEMODE_DISABLE;
+	htim->CR2 &= ~(TIM_CR2_MMS);
+	htim->CR2 |= TIM_TRGO_RESET;
+
+	// Configure outputs
+	TIM_ConfigChannelPWM(TIM_CHANNEL_1, TIM_OCMODE_PWM1);
+	htim->CCR1 = TIM_DATA_PULSE;
+
+	TIM_ConfigChannelPWM(TIM_CHANNEL_2, TIM_OCMODE_PWM2);
+	htim->CCR2 = TIM_CLK_PULSE;
+
+	/**TIM3 GPIO Configuration
+	PA6     ------> TIM3_CH1
+	PA7     ------> TIM3_CH2
 	*/
-	/*GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);*/
-	__HAL_AFIO_REMAP_TIM2_PARTIAL_2();
 
-	// enable timer
-	htim->CR1 |= TIM_CR1_CEN;
+	// Enable channel 1 and 2
+	htim->CCER |= TIM_CCER_CC1E | TIM_CCER_CC2E;
+	htim->CR1 |= TIM_CR1_CEN; // enable timer
 }
 
-const uint32_t ClkChannel = GPIO_CRH_CNF10_1;
-const uint32_t DataChannel = GPIO_CRH_CNF11_1;
-void TIM2_EnableChannels(uint32_t channel_flags)
+/*const uint32_t ClkChannel = GPIO_MODER_MODE7_1;
+const uint32_t DataChannel = GPIO_MODER_MODE6_1;
+void TIM_EnableChannels(uint32_t channel_flags)
 {
-	GPIOB->CRH |= channel_flags;
+	GPIOA->MODER |= channel_flags;
 }
 
-void TIM2_DisableChannels(uint32_t channel_flags)
+void TIM_DisableChannels(uint32_t channel_flags)
 {
-	GPIOB->CRH &= ~channel_flags;
-}
+	GPIOA->MODER &= ~channel_flags;
+}*/
 
 void delayMicroseconds(uint16_t us)
 {
@@ -127,14 +158,15 @@ void delayMicroseconds(uint16_t us)
 	while (__HAL_TIM_GET_COUNTER(&htim7) < us);
 }
 
-/*IECResult*/void timeoutWait(IOPin waitPin, bool waitForSignal/*, uint32_t timeout*/)
+/*IECResult*/void timeoutWaitData(bool waitForSignal/*, uint32_t timeout*/)
 {
 	//uint32_t time = 0;
 	bool state;
 
 	while(1)
 	{
-		state = waitPin.read();
+		//state = waitPin.read();
+		state = (DAT_GPIO_Port->IDR & DAT_Pin) != 0;
 		if (state == waitForSignal)
 		{
 			return;
@@ -164,7 +196,7 @@ void delayMicroseconds(uint16_t us)
 
 void iec_init()
 {
-	TIM2_Init();
+	TIM_Init();
 }
 
 void iec_command(bool start)
@@ -177,11 +209,11 @@ void iec_command(bool start)
 		AtnPin.write(false);
 		AtnPin.pinMode_Output();
 		delayMicroseconds(TIMING_CMD_START_DELAY);
-		ClkPin.write(false);
-		ClkPin.pinMode_Output();
+		PIN_LOW(CLK_GPIO_Port, CLK_Pin); //ClkPin.write(false);
+		SET_MODE(CLK_GPIO_Port, CLK_ModeBit, MODE_Output);//ClkPin.pinMode_Output();
 
 		// Wait for listener to receive attention
-		timeoutWait(DataPin, false);
+		timeoutWaitData(false);
 	}
 	else
 	{
@@ -194,9 +226,9 @@ void iec_command(bool start)
 void iec_end()
 {
 	// Wait for receivers to indicate no listeners
-	timeoutWait(DataPin, true);
-	ClkPin.write(true);
-	ClkPin.pinMode_Input();
+	timeoutWaitData(true);
+	PIN_HIGH(CLK_GPIO_Port, CLK_Pin); // ClkPin.write(true);
+	SET_MODE(CLK_GPIO_Port, CLK_ModeBit, MODE_Input); //ClkPin.pinMode_Input();
 }
 
 void iec_reset()
@@ -214,17 +246,17 @@ void iec_send(uint8_t data, bool signalEOI)
 	delayMicroseconds(TIMING_BETWEEN_BYTES);
 
 	// Indicate we are ready to send data
-	ClkPin.write(true);
+	PIN_HIGH(CLK_GPIO_Port, CLK_Pin); //ClkPin.write(true);
 
 	// Wait for listener to be ready
-	timeoutWait(DataPin, true); // Must wait indefinitely
+	timeoutWaitData(true); // Must wait indefinitely
 
 	if(signalEOI) {
 		// get eoi acknowledge
-		timeoutWait(DataPin, false);
+		timeoutWaitData(false);
 
 		// Wait for listener to end eoi acknowledge
-		timeoutWait(DataPin, true);
+		timeoutWaitData(true);
 
 		// Prepare for transmission
 		delayMicroseconds(TIMING_EOI_DELAY);
@@ -236,35 +268,39 @@ void iec_send(uint8_t data, bool signalEOI)
 	}
 
 	// Switch pins to be timer controlled. Should automatically pull CLK low.
-	ClkPin.write(false);
-	DataPin.write(true);
-	DataPin.pinMode_Output();
-	htim->CCR4 = 60000; // By default leave data disabled
+	PIN_LOW(CLK_GPIO_Port, CLK_Pin); //ClkPin.write(false);
+	PIN_HIGH(DAT_GPIO_Port, DAT_Pin); //DataPin.write(true);
+	SET_MODE(DAT_GPIO_Port, DAT_ModeBit, MODE_Output); //DataPin.pinMode_Output();
+	htim->CCR1 = 60000; // By default leave data disabled
 	htim->CNT = 0;
-	TIM2_EnableChannels(ClkChannel | DataChannel);
+	//TIM_EnableChannels(ClkChannel | DataChannel);
+	SET_MODE(CLK_GPIO_Port, CLK_ModeBit, MODE_Timer);
+	SET_MODE(DAT_GPIO_Port, DAT_ModeBit, MODE_Timer);
+	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 	//HAL_GPIO_WritePin(LED_Blue_GPIO_Port, LED_Blue_Pin, GPIO_PIN_SET);
 
 	// Send bits, LSB first
 	for (int i = 0; i < 8; i++)
 	{
 		// Load data bit into timer
-		// 1056 = ~44us
+		// 3696 = ~44us
 		// 60k is larger than timer max value, just to prevent data pin from being pulled low
-		htim->CCR4 = (data & 1) ? 60000 : 1056;
+		htim->CCR1 = (data & 1) ? 60000 : TIM_DATA_PULSE;
 
 		// Wait for timer to pass the data threshold
-		while(htim->CNT <= 1056);
+		while(htim->CNT <= TIM_DATA_PULSE);
 
 		// Wait for timer rollover
-		while(htim->CNT >= 1056);
+		while(htim->CNT >= TIM_DATA_PULSE);
 
 		data >>= 1;
 	}
 
 	// Disables timer and returns control to normal GPIO operations
 	// Should return to DATA pin as floating input, and CLK pulled low
-	TIM2_DisableChannels(ClkChannel | DataChannel);
-	DataPin.pinMode_Input();
+	//TIM_DisableChannels(ClkChannel | DataChannel);
+	SET_MODE(CLK_GPIO_Port, CLK_ModeBit, MODE_Output);
+	SET_MODE(DAT_GPIO_Port, DAT_ModeBit, MODE_Input);;//DataPin.pinMode_Input();
 	//HAL_GPIO_WritePin(LED_Blue_GPIO_Port, LED_Blue_Pin, GPIO_PIN_RESET);
 
 	// End transmission, give time for receiver to indicate busy state
@@ -273,5 +309,5 @@ void iec_send(uint8_t data, bool signalEOI)
 	delayMicroseconds(1000);
 
 	// Wait for receivers to be ready again
-	timeoutWait(DataPin, false); // Receiver has 1000 us to indicate receive OK
+	timeoutWaitData(false); // Receiver has 1000 us to indicate receive OK
 }

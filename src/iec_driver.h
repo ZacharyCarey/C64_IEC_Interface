@@ -6,6 +6,9 @@
 #define EXTERNC
 #endif
 
+// TODO temp delete
+EXTERNC void TIM_Init();
+
 EXTERNC void iec_init();
 
 // Interrupts the bus (ATN line) to start the transmission or releases the but as the end of a command
