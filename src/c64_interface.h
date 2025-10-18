@@ -18,6 +18,7 @@ const uint8_t newline_char = 13;
 class C64_Basic
 {
 public:
+	C64_Basic(){}
 	C64_Basic(IEC* iec)
 	{
 		this->driver = iec;

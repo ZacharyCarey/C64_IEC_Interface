@@ -221,7 +221,12 @@ static void MX_USART3_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART3_Init 2 */
-
+  if (huart3.Init.Parity != UART_PARITY_NONE)
+  {
+	  __HAL_UART_ENABLE_IT(&huart3, UART_IT_PE); // Enable the UART Parity Error Interrupt
+  }
+  __HAL_UART_ENABLE_IT(&huart3, UART_IT_ERR); // Enable the UART Error Interrupt: (Frame error, noise error, overrun error)
+  __HAL_UART_ENABLE_IT(&huart3, UART_IT_RXNE); // Enable the UART Data Register not empty Interrupt
   /* USER CODE END USART3_Init 2 */
 
 }
@@ -245,20 +250,20 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(Busy_GPIO_Port, Busy_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, LED_Pin|Busy_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : LED_Pin DAT_Pin CLK_Pin */
-  GPIO_InitStruct.Pin = LED_Pin|DAT_Pin|CLK_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : Busy_Pin */
-  GPIO_InitStruct.Pin = Busy_Pin;
+  /*Configure GPIO pins : LED_Pin Busy_Pin */
+  GPIO_InitStruct.Pin = LED_Pin|Busy_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(Busy_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DAT_Pin CLK_Pin */
+  GPIO_InitStruct.Pin = DAT_Pin|CLK_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ATN_Pin RESET_Pin */
   GPIO_InitStruct.Pin = ATN_Pin|RESET_Pin;
